@@ -10,6 +10,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 
 <body>
@@ -142,6 +143,19 @@
                     </h2>
                 </div>
                 <div class="actions-list">
+                    <button class="action-btn" id="btnAddClient" onclick="openAddClient()">
+                        <svg class="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="8.5" cy="7" r="4" />
+                            <line x1="20" y1="8" x2="20" y2="14" />
+                            <line x1="23" y1="11" x2="17" y2="11" />
+                        </svg>
+                        <div class="action-info">
+                            <span class="action-name">Add Device</span>
+                            <span class="action-desc">Generate config + QR code</span>
+                        </div>
+                    </button>
                     <button class="action-btn" id="btnRestart" onclick="doAction('restart')">
                         <svg class="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                             stroke-linecap="round" stroke-linejoin="round">
@@ -215,6 +229,60 @@
             <span>Auto-refresh every 30s</span>
             <span id="lastUpdated">—</span>
         </footer>
+    </div>
+
+    <!-- Add Client Modal -->
+    <div class="modal-overlay" id="addClientModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <line x1="20" y1="8" x2="20" y2="14" />
+                        <line x1="23" y1="11" x2="17" y2="11" />
+                    </svg>
+                    Add Device
+                </h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+
+            <!-- Step 1: Name input -->
+            <div class="modal-step" id="stepName">
+                <label class="input-label" for="clientName">Device Name</label>
+                <input type="text" id="clientName" class="input-field" placeholder="e.g. moms-phone"
+                    pattern="[a-zA-Z0-9-]+" maxlength="20" autocomplete="off" />
+                <p class="input-hint">Letters, numbers, and dashes only</p>
+                <button class="modal-btn" id="btnGenerate" onclick="generateClient()">
+                    Generate Config
+                    <div class="action-spinner" id="generateSpinner" style="display:none"></div>
+                </button>
+            </div>
+
+            <!-- Step 2: QR + Config -->
+            <div class="modal-step" id="stepResult" style="display:none">
+                <div class="qr-wrap">
+                    <canvas id="qrCanvas"></canvas>
+                </div>
+                <p class="qr-hint">Scan with WireGuard app on the device</p>
+                <details class="config-details">
+                    <summary>View raw config</summary>
+                    <pre class="config-text" id="configText"></pre>
+                </details>
+                <div class="modal-actions">
+                    <button class="modal-btn secondary" onclick="copyConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                        Copy Config
+                    </button>
+                    <button class="modal-btn" onclick="closeModal()">Done</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

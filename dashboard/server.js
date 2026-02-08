@@ -1,5 +1,5 @@
 const express = require('express');
-const { execSync, exec } = require('child_process');
+const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -21,11 +21,15 @@ const GCP_PROJECT = process.env.GCP_PROJECT;
 const GCP_ZONE = process.env.GCP_ZONE;
 const VM_NAME = process.env.VM_NAME || 'wireguard-vpn';
 const WG_PORT = process.env.WG_PORT || '51820';
+const WG_SUBNET = process.env.WG_SUBNET || '10.0.0';
 const PORT = process.env.DASHBOARD_PORT || 3000;
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
+// --- VM info cache (IP, zone, machine type don't change) ---
+let vmCache = null;
 
 // --- Helper: run command on VM via gcloud SSH ---
 function sshCommand(cmd, timeout = 15000) {
@@ -44,14 +48,49 @@ function sshCommand(cmd, timeout = 15000) {
     });
 }
 
-// --- Helper: get VM info via gcloud (no SSH needed) ---
-function gcloudDescribe() {
+// --- Helper: run a bash script on the VM via SCP (avoids Windows cmd.exe escaping) ---
+function sshScript(scriptContent, timeout = 30000) {
+    return new Promise((resolve, reject) => {
+        const tmpFile = path.join(__dirname, `.tmp-script-${Date.now()}.sh`);
+        fs.writeFileSync(tmpFile, scriptContent);
+
+        const scpCmd = `gcloud compute scp "${tmpFile}" ${VM_NAME}:/tmp/_dash_script.sh --project=${GCP_PROJECT} --zone=${GCP_ZONE} --quiet 2>&1`;
+
+        exec(scpCmd, { timeout: 15000 }, (scpErr, scpOut) => {
+            try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
+
+            if (scpErr) return reject(new Error('SCP failed: ' + (scpOut || scpErr.message)));
+
+            const runCmd = `gcloud compute ssh ${VM_NAME} --project=${GCP_PROJECT} --zone=${GCP_ZONE} --command="bash /tmp/_dash_script.sh && rm -f /tmp/_dash_script.sh" --quiet 2>&1`;
+
+            exec(runCmd, { timeout }, (error, stdout) => {
+                if (error && error.killed) reject(new Error('Command timed out'));
+                else if (error) reject(new Error(stdout || error.message));
+                else resolve(stdout.trim());
+            });
+        });
+    });
+}
+
+// --- Helper: get VM info via gcloud (cached) ---
+async function getVmInfo() {
+    if (vmCache) return vmCache;
+
     return new Promise((resolve, reject) => {
         const cmd = `gcloud compute instances describe ${VM_NAME} --project=${GCP_PROJECT} --zone=${GCP_ZONE} --format=json --quiet 2>&1`;
         exec(cmd, { timeout: 10000 }, (error, stdout) => {
             if (error) return reject(new Error(stdout || error.message));
             try {
-                resolve(JSON.parse(stdout));
+                const vm = JSON.parse(stdout);
+                vmCache = {
+                    name: vm.name,
+                    status: vm.status,
+                    machineType: vm.machineType?.split('/').pop(),
+                    zone: vm.zone?.split('/').pop(),
+                    ip: vm.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || 'unknown',
+                    creationTimestamp: vm.creationTimestamp
+                };
+                resolve(vmCache);
             } catch (e) {
                 reject(new Error('Failed to parse VM info'));
             }
@@ -100,22 +139,20 @@ function parseWgShow(output) {
 // API Routes
 // ============================================================
 
-// GET /api/status — WireGuard status + server uptime
+// GET /api/status — WireGuard status + uptime in ONE SSH call
 app.get('/api/status', async (req, res) => {
     try {
-        const [wgOutput, uptimeOutput] = await Promise.all([
-            sshCommand('sudo wg show wg0'),
-            sshCommand('uptime -p')
-        ]);
+        const output = await sshCommand(
+            'echo "===WG===" && sudo wg show wg0 && echo "===UPTIME===" && uptime -p'
+        );
 
-        const wg = parseWgShow(wgOutput);
+        const wgPart = output.split('===UPTIME===')[0].replace('===WG===', '').trim();
+        const uptimePart = output.split('===UPTIME===')[1]?.trim() || '—';
+
+        const wg = parseWgShow(wgPart);
         res.json({
             ok: true,
-            server: {
-                status: 'running',
-                uptime: uptimeOutput,
-                interface: wg.interface
-            },
+            server: { status: 'running', uptime: uptimePart, interface: wg.interface },
             peers: wg.peers,
             timestamp: new Date().toISOString()
         });
@@ -130,22 +167,11 @@ app.get('/api/status', async (req, res) => {
     }
 });
 
-// GET /api/vm — VM metadata from gcloud
+// GET /api/vm — VM metadata (cached after first call)
 app.get('/api/vm', async (req, res) => {
     try {
-        const vm = await gcloudDescribe();
-        const ip = vm.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || 'unknown';
-        res.json({
-            ok: true,
-            vm: {
-                name: vm.name,
-                status: vm.status,
-                machineType: vm.machineType?.split('/').pop(),
-                zone: vm.zone?.split('/').pop(),
-                ip,
-                creationTimestamp: vm.creationTimestamp
-            }
-        });
+        const vm = await getVmInfo();
+        res.json({ ok: true, vm });
     } catch (err) {
         res.json({ ok: false, error: err.message });
     }
@@ -173,6 +199,89 @@ app.post('/api/action/speedtest', async (req, res) => {
             if (l.startsWith('Upload:')) result.upload = l.split(':')[1]?.trim();
         });
         res.json({ ok: true, speedtest: result, raw: output });
+    } catch (err) {
+        res.json({ ok: false, error: err.message });
+    }
+});
+
+// POST /api/client/add — Generate a new client config
+app.post('/api/client/add', async (req, res) => {
+    const { name } = req.body;
+
+    if (!name || !/^[a-zA-Z0-9-]{1,20}$/.test(name)) {
+        return res.json({ ok: false, error: 'Invalid name. Use letters, numbers, and dashes only (max 20 chars).' });
+    }
+
+    try {
+        const vm = await getVmInfo();
+        const serverIP = vm.ip;
+
+        // Build a self-contained bash script (SCP'd to avoid Windows escaping)
+        const script = `#!/bin/bash
+set -e
+
+SERVER_PUB=$(sudo cat /etc/wireguard/server_public.key 2>/dev/null || sudo wg show wg0 public-key)
+
+# Find next available IP
+USED_IPS=$(sudo grep -oP '${WG_SUBNET}\\.\\K[0-9]+' /etc/wireguard/wg0.conf | sort -n)
+NEXT_IP=2
+for ip in $USED_IPS; do
+  if [ "$ip" -ge "$NEXT_IP" ]; then
+    NEXT_IP=$((ip + 1))
+  fi
+done
+if [ "$NEXT_IP" -gt 254 ]; then
+  echo "ERROR:No available IPs"
+  exit 1
+fi
+
+# Generate client keypair
+CLIENT_PRIV=$(wg genkey)
+CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
+
+# Backup and add peer
+sudo cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.bak
+echo "" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+echo "# Client: ${name}" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+echo "[Peer]" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+echo "PublicKey = $CLIENT_PUB" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+echo "AllowedIPs = ${WG_SUBNET}.$NEXT_IP/32" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+
+# Restart to apply
+sudo systemctl restart wg-quick@wg0
+
+# Output the client config
+echo "===CONFIG==="
+echo "[Interface]"
+echo "PrivateKey = $CLIENT_PRIV"
+echo "Address = ${WG_SUBNET}.$NEXT_IP/24"
+echo "DNS = 1.1.1.1, 8.8.8.8"
+echo ""
+echo "[Peer]"
+echo "PublicKey = $SERVER_PUB"
+echo "Endpoint = ${serverIP}:${WG_PORT}"
+echo "AllowedIPs = 0.0.0.0/0"
+echo "PersistentKeepalive = 25"
+echo "===END==="
+
+rm -f /tmp/client_*.conf /tmp/vpn-qr-*.png 2>/dev/null
+`;
+
+        const output = await sshScript(script, 45000);
+
+        const configMatch = output.match(/===CONFIG===([\s\S]*?)===END===/);
+        if (!configMatch) {
+            return res.json({ ok: false, error: 'Failed to generate config. Output: ' + output.slice(0, 200) });
+        }
+
+        const config = configMatch[1].trim();
+
+        // Save config locally
+        const clientsDir = path.join(__dirname, '..', 'clients');
+        if (!fs.existsSync(clientsDir)) fs.mkdirSync(clientsDir, { recursive: true });
+        fs.writeFileSync(path.join(clientsDir, `${name}.conf`), config + '\n');
+
+        res.json({ ok: true, name, config });
     } catch (err) {
         res.json({ ok: false, error: err.message });
     }

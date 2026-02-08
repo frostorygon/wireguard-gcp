@@ -1,20 +1,22 @@
 // ============================================================
-// VPN Dashboard — Client-side polling and UI updates
+// VPN Dashboard — Client-side polling, UI updates, Add Client
 // ============================================================
 
-const POLL_INTERVAL = 30000; // 30 seconds
+const POLL_INTERVAL = 30000;
 let pollTimer = null;
+let lastConfig = ''; // Holds most recent generated config for copy
 
-// --- DOM refs ---
 const $ = (id) => document.getElementById(id);
 
 // --- Fetch helpers ---
-async function api(path, method = 'GET') {
+async function api(path, method = 'GET', body = null) {
     try {
-        const res = await fetch(`/api/${path}`, {
-            method,
-            headers: method === 'POST' ? { 'Content-Type': 'application/json' } : {}
-        });
+        const opts = { method, headers: {} };
+        if (body) {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(body);
+        }
+        const res = await fetch(`/api/${path}`, opts);
         return await res.json();
     } catch (err) {
         return { ok: false, error: err.message };
@@ -29,7 +31,6 @@ function truncateKey(key) {
 
 function timeAgo(text) {
     if (!text) return '—';
-    // "1 minute, 30 seconds ago" → simplified
     return text.replace(/ ago$/, '');
 }
 
@@ -58,7 +59,7 @@ async function fetchStatus() {
     $('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 
-// --- Fetch VM info (runs once) ---
+// --- Fetch VM info (runs once, cached server-side) ---
 async function fetchVmInfo() {
     const data = await api('vm');
     if (data.ok && data.vm) {
@@ -78,12 +79,10 @@ function renderPeers(peers) {
     }
 
     tbody.innerHTML = peers.map(peer => {
-        // Determine handshake status class
         let hsClass = 'handshake-none';
         let hsText = 'Never';
         if (peer.latestHandshake) {
             hsText = timeAgo(peer.latestHandshake);
-            // If handshake contains "second" or "minute" → active
             if (/second|minute/.test(peer.latestHandshake)) {
                 hsClass = 'handshake-active';
             } else {
@@ -109,30 +108,23 @@ async function doAction(action) {
     const btn = $(btnId);
     const spinner = btn.querySelector('.action-spinner');
 
-    // Show loading state
     btn.disabled = true;
     if (spinner) spinner.style.display = 'block';
 
     const data = await api(`action/${action}`, 'POST');
 
-    // Hide loading state
     btn.disabled = false;
     if (spinner) spinner.style.display = 'none';
 
-    // Show result
     if (action === 'speedtest' && data.ok && data.speedtest) {
-        const result = $('speedtestResult');
-        result.style.display = 'block';
+        $('speedtestResult').style.display = 'block';
         $('speedPing').textContent = data.speedtest.ping || '—';
         $('speedDown').textContent = data.speedtest.download || '—';
         $('speedUp').textContent = data.speedtest.upload || '—';
         addLog('Speed test completed', 'success');
     } else if (data.ok) {
         addLog(data.message || `${action} completed`, 'success');
-        // Refresh status after restart
-        if (action === 'restart') {
-            setTimeout(fetchStatus, 3000);
-        }
+        if (action === 'restart') setTimeout(fetchStatus, 3000);
     } else {
         addLog(`Error: ${data.error || 'Unknown error'}`, 'error');
     }
@@ -145,12 +137,102 @@ function addLog(message, type = 'success') {
     entry.className = `log-entry ${type}`;
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     log.prepend(entry);
-
-    // Keep only last 10 entries
-    while (log.children.length > 10) {
-        log.removeChild(log.lastChild);
-    }
+    while (log.children.length > 10) log.removeChild(log.lastChild);
 }
+
+// ============================================================
+// Add Client — Modal + QR Code
+// ============================================================
+
+function openAddClient() {
+    const modal = $('addClientModal');
+    modal.classList.add('open');
+    // Reset to step 1
+    $('stepName').style.display = 'block';
+    $('stepResult').style.display = 'none';
+    $('clientName').value = '';
+    $('clientName').focus();
+}
+
+function closeModal() {
+    $('addClientModal').classList.remove('open');
+    // Refresh peer list after adding
+    setTimeout(fetchStatus, 1000);
+}
+
+async function generateClient() {
+    const nameInput = $('clientName');
+    const name = nameInput.value.trim();
+
+    if (!name || !/^[a-zA-Z0-9-]{1,20}$/.test(name)) {
+        nameInput.style.borderColor = 'var(--danger)';
+        return;
+    }
+    nameInput.style.borderColor = '';
+
+    const btn = $('btnGenerate');
+    const spinner = $('generateSpinner');
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+
+    const data = await api('client/add', 'POST', { name });
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+
+    if (!data.ok) {
+        addLog(`Add client failed: ${data.error}`, 'error');
+        nameInput.style.borderColor = 'var(--danger)';
+        return;
+    }
+
+    lastConfig = data.config;
+
+    // Render QR code on canvas
+    const canvas = $('qrCanvas');
+    try {
+        await QRCode.toCanvas(canvas, data.config, {
+            width: 300,
+            margin: 2,
+            color: { dark: '#ffffff', light: '#0c1016' }
+        });
+    } catch (err) {
+        console.error('QR generation failed:', err);
+    }
+
+    // Show config text
+    $('configText').textContent = data.config;
+
+    // Switch to result step
+    $('stepName').style.display = 'none';
+    $('stepResult').style.display = 'block';
+
+    addLog(`Device "${name}" added successfully`, 'success');
+}
+
+function copyConfig() {
+    if (!lastConfig) return;
+    navigator.clipboard.writeText(lastConfig).then(() => {
+        addLog('Config copied to clipboard', 'success');
+    }).catch(() => {
+        // Fallback: select the text
+        const pre = $('configText');
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+    });
+}
+
+// Close modal on overlay click
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'addClientModal') closeModal();
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+});
 
 // --- Polling loop ---
 function startPolling() {
