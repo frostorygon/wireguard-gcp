@@ -1,0 +1,20 @@
+# Security — never commit secrets or generated configs
+config/.env
+clients/*.conf
+!clients/.gitkeep
+
+# SSH keys
+*.key
+*.pem
+id_rsa*
+google_compute_engine*
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.swp
+*~
