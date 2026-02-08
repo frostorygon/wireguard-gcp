@@ -1,154 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WireGuard VPN Dashboard</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Control — WireGuard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
-  <div class="container">
+    <div class="noise"></div>
+    <div class="container">
 
-    <!-- Header -->
-    <header class="header">
-      <div class="header-left">
-        <div class="logo">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <h1>WireGuard VPN</h1>
-        </div>
-        <span class="server-ip" id="serverIp">—</span>
-      </div>
-      <div class="header-right">
-        <span class="status-badge" id="statusBadge">
-          <span class="status-dot"></span>
-          <span class="status-text">Checking...</span>
-        </span>
-        <span class="last-updated" id="lastUpdated">—</span>
-      </div>
-    </header>
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg class="logo-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="M12 8v4M12 16h.01" opacity="0.5" />
+                    </svg>
+                    <div class="logo-text">
+                        <h1>VPN Control</h1>
+                        <span class="logo-sub">WireGuard on GCP</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <code class="server-ip" id="serverIp">—</code>
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting</span>
+                </div>
+            </div>
+        </header>
 
-    <!-- Stats Row -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-icon uptime-icon">⏱</div>
-        <div class="stat-info">
-          <span class="stat-label">Uptime</span>
-          <span class="stat-value" id="uptime">—</span>
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <svg class="stat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <div class="stat-info">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value" id="uptime">—</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <div class="stat-info">
+                    <span class="stat-label">Peers</span>
+                    <span class="stat-value" id="peerCount">—</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <div class="stat-info">
+                    <span class="stat-label">Instance</span>
+                    <span class="stat-value" id="machineType">—</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path
+                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                <div class="stat-info">
+                    <span class="stat-label">Region</span>
+                    <span class="stat-value" id="region">—</span>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon peers-icon">👥</div>
-        <div class="stat-info">
-          <span class="stat-label">Connected Peers</span>
-          <span class="stat-value" id="peerCount">—</span>
+
+        <!-- Main Layout -->
+        <div class="main-grid">
+
+            <!-- Peers -->
+            <section class="card peers-card">
+                <div class="card-header">
+                    <h2>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                            <path d="M2 17l10 5 10-5" />
+                            <path d="M2 12l10 5 10-5" />
+                        </svg>
+                        Connected Peers
+                    </h2>
+                    <span class="badge" id="peerBadge">0</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="peers-table">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Allowed IPs</th>
+                                <th>Handshake</th>
+                                <th>↓ RX</th>
+                                <th>↑ TX</th>
+                            </tr>
+                        </thead>
+                        <tbody id="peersBody">
+                            <tr class="empty-row">
+                                <td colspan="5">Fetching peer data…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Actions -->
+            <aside class="card actions-card">
+                <div class="card-header">
+                    <h2>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        Actions
+                    </h2>
+                </div>
+                <div class="actions-list">
+                    <button class="action-btn" id="btnRestart" onclick="doAction('restart')">
+                        <svg class="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
+                        <div class="action-info">
+                            <span class="action-name">Restart WireGuard</span>
+                            <span class="action-desc">Restart wg-quick@wg0 service</span>
+                        </div>
+                        <div class="action-spinner" style="display:none"></div>
+                    </button>
+                    <button class="action-btn" id="btnSpeedtest" onclick="doAction('speedtest')">
+                        <svg class="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                        </svg>
+                        <div class="action-info">
+                            <span class="action-name">Speed Test</span>
+                            <span class="action-desc">Measure server throughput</span>
+                        </div>
+                        <div class="action-spinner" style="display:none"></div>
+                    </button>
+                    <button class="action-btn" onclick="fetchStatus()">
+                        <svg class="action-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="1 4 1 10 7 10" />
+                            <polyline points="23 20 23 14 17 14" />
+                            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                        </svg>
+                        <div class="action-info">
+                            <span class="action-name">Refresh Now</span>
+                            <span class="action-desc">Force a status poll</span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Speed Test Results -->
+                <div class="speedtest-panel" id="speedtestResult" style="display:none">
+                    <div class="speedtest-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                        </svg>
+                        Speed Test
+                    </div>
+                    <div class="speed-grid">
+                        <div class="speed-item">
+                            <span class="speed-num" id="speedPing">—</span>
+                            <span class="speed-unit">Ping</span>
+                        </div>
+                        <div class="speed-item">
+                            <span class="speed-num" id="speedDown">—</span>
+                            <span class="speed-unit">Download</span>
+                        </div>
+                        <div class="speed-item">
+                            <span class="speed-num" id="speedUp">—</span>
+                            <span class="speed-unit">Upload</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Log -->
+                <div class="action-log" id="actionLog"></div>
+            </aside>
+
         </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon machine-icon">🖥️</div>
-        <div class="stat-info">
-          <span class="stat-label">Instance</span>
-          <span class="stat-value" id="machineType">—</span>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon region-icon">🌏</div>
-        <div class="stat-info">
-          <span class="stat-label">Region</span>
-          <span class="stat-value" id="region">—</span>
-        </div>
-      </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span>Auto-refresh every 30s</span>
+            <span id="lastUpdated">—</span>
+        </footer>
     </div>
 
-    <!-- Main Grid -->
-    <div class="main-grid">
-
-      <!-- Peers Table -->
-      <div class="card peers-card">
-        <div class="card-header">
-          <h2>Connected Peers</h2>
-          <span class="card-badge" id="peerBadge">0</span>
-        </div>
-        <div class="peers-table-wrap">
-          <table class="peers-table">
-            <thead>
-              <tr>
-                <th>Public Key</th>
-                <th>Allowed IPs</th>
-                <th>Last Handshake</th>
-                <th>↓ Received</th>
-                <th>↑ Sent</th>
-              </tr>
-            </thead>
-            <tbody id="peersBody">
-              <tr class="empty-row">
-                <td colspan="5">Loading...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Actions Panel -->
-      <div class="card actions-card">
-        <div class="card-header">
-          <h2>Quick Actions</h2>
-        </div>
-        <div class="actions-list">
-          <button class="action-btn" id="btnRestart" onclick="doAction('restart')">
-            <span class="action-icon">🔄</span>
-            <div class="action-info">
-              <span class="action-name">Restart WireGuard</span>
-              <span class="action-desc">Restart the WireGuard service</span>
-            </div>
-            <span class="action-spinner" style="display:none"></span>
-          </button>
-          <button class="action-btn" id="btnSpeedtest" onclick="doAction('speedtest')">
-            <span class="action-icon">⚡</span>
-            <div class="action-info">
-              <span class="action-name">Speed Test</span>
-              <span class="action-desc">Run speedtest-cli on the server</span>
-            </div>
-            <span class="action-spinner" style="display:none"></span>
-          </button>
-          <button class="action-btn" onclick="fetchStatus()">
-            <span class="action-icon">🔃</span>
-            <div class="action-info">
-              <span class="action-name">Refresh Status</span>
-              <span class="action-desc">Poll the server now</span>
-            </div>
-          </button>
-        </div>
-
-        <!-- Speed Test Result -->
-        <div class="speedtest-result" id="speedtestResult" style="display:none">
-          <h3>Speed Test Results</h3>
-          <div class="speed-stats">
-            <div class="speed-stat">
-              <span class="speed-label">Ping</span>
-              <span class="speed-value" id="speedPing">—</span>
-            </div>
-            <div class="speed-stat">
-              <span class="speed-label">Download</span>
-              <span class="speed-value" id="speedDown">—</span>
-            </div>
-            <div class="speed-stat">
-              <span class="speed-label">Upload</span>
-              <span class="speed-value" id="speedUp">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Action Log -->
-        <div class="action-log" id="actionLog"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
+
 </html>
