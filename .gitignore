@@ -1,7 +1,9 @@
 # Security — never commit secrets or generated configs
 config/.env
 clients/*.conf
+clients/*.png
 !clients/.gitkeep
+STATUS.md
 
 # SSH keys
 *.key
