@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WireGuard VPN Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <h1>WireGuard VPN</h1>
+        </div>
+        <span class="server-ip" id="serverIp">—</span>
+      </div>
+      <div class="header-right">
+        <span class="status-badge" id="statusBadge">
+          <span class="status-dot"></span>
+          <span class="status-text">Checking...</span>
+        </span>
+        <span class="last-updated" id="lastUpdated">—</span>
+      </div>
+    </header>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon uptime-icon">⏱</div>
+        <div class="stat-info">
+          <span class="stat-label">Uptime</span>
+          <span class="stat-value" id="uptime">—</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon peers-icon">👥</div>
+        <div class="stat-info">
+          <span class="stat-label">Connected Peers</span>
+          <span class="stat-value" id="peerCount">—</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon machine-icon">🖥️</div>
+        <div class="stat-info">
+          <span class="stat-label">Instance</span>
+          <span class="stat-value" id="machineType">—</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon region-icon">🌏</div>
+        <div class="stat-info">
+          <span class="stat-label">Region</span>
+          <span class="stat-value" id="region">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+
+      <!-- Peers Table -->
+      <div class="card peers-card">
+        <div class="card-header">
+          <h2>Connected Peers</h2>
+          <span class="card-badge" id="peerBadge">0</span>
+        </div>
+        <div class="peers-table-wrap">
+          <table class="peers-table">
+            <thead>
+              <tr>
+                <th>Public Key</th>
+                <th>Allowed IPs</th>
+                <th>Last Handshake</th>
+                <th>↓ Received</th>
+                <th>↑ Sent</th>
+              </tr>
+            </thead>
+            <tbody id="peersBody">
+              <tr class="empty-row">
+                <td colspan="5">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Actions Panel -->
+      <div class="card actions-card">
+        <div class="card-header">
+          <h2>Quick Actions</h2>
+        </div>
+        <div class="actions-list">
+          <button class="action-btn" id="btnRestart" onclick="doAction('restart')">
+            <span class="action-icon">🔄</span>
+            <div class="action-info">
+              <span class="action-name">Restart WireGuard</span>
+              <span class="action-desc">Restart the WireGuard service</span>
+            </div>
+            <span class="action-spinner" style="display:none"></span>
+          </button>
+          <button class="action-btn" id="btnSpeedtest" onclick="doAction('speedtest')">
+            <span class="action-icon">⚡</span>
+            <div class="action-info">
+              <span class="action-name">Speed Test</span>
+              <span class="action-desc">Run speedtest-cli on the server</span>
+            </div>
+            <span class="action-spinner" style="display:none"></span>
+          </button>
+          <button class="action-btn" onclick="fetchStatus()">
+            <span class="action-icon">🔃</span>
+            <div class="action-info">
+              <span class="action-name">Refresh Status</span>
+              <span class="action-desc">Poll the server now</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Speed Test Result -->
+        <div class="speedtest-result" id="speedtestResult" style="display:none">
+          <h3>Speed Test Results</h3>
+          <div class="speed-stats">
+            <div class="speed-stat">
+              <span class="speed-label">Ping</span>
+              <span class="speed-value" id="speedPing">—</span>
+            </div>
+            <div class="speed-stat">
+              <span class="speed-label">Download</span>
+              <span class="speed-value" id="speedDown">—</span>
+            </div>
+            <div class="speed-stat">
+              <span class="speed-label">Upload</span>
+              <span class="speed-value" id="speedUp">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Log -->
+        <div class="action-log" id="actionLog"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
